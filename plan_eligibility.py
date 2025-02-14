@@ -75,19 +75,57 @@ class PlanEligibilityEvaluator:
 
     def evaluate_eligibility(self, plan_id: str, zip_code: str, year: str) -> PlanEligibilityCriteria:
         """Evaluate eligibility criteria for a given plan."""
+        # Get data from both sources
         api_data = self.get_plan_details(plan_id, zip_code, year)
         puf_rules = self.get_plan_rules(plan_id, year)
         
-        # Extract service area from API response
-        service_area = api_data.get('plan', {}).get('service_area_id', 'Not specified')
+        if puf_rules is None:
+            raise Exception(f"Plan {plan_id} not found in PUF file for year {year}")
         
-        # Extract other fields from API response
+        # Extract data from API response
         plan_data = api_data.get('plan', {})
+        
+        # Validate plan details against PUF rules with better error handling
+        api_market = plan_data.get('market', '').upper()
+        puf_market = str(puf_rules.get('MarketCoverage', '')).upper().strip()
+        if api_market and puf_market and api_market != puf_market:
+            raise Exception(f"Market coverage mismatch: API reports {api_market}, PUF file reports {puf_market}")
+            
+        api_plan_type = plan_data.get('type', '').upper()
+        puf_plan_type = str(puf_rules.get('PlanType', '')).upper().strip()
+        if api_plan_type and puf_plan_type:
+            # Print debug information
+            print(f"Debug - API Plan Type: '{api_plan_type}'")
+            print(f"Debug - PUF Plan Type: '{puf_plan_type}'")
+            
+            # Map common plan type variations
+            plan_type_mapping = {
+                'EPO': ['EPO', 'EXCLUSIVE PROVIDER ORGANIZATION'],
+                'HMO': ['HMO', 'HEALTH MAINTENANCE ORGANIZATION'],
+                'PPO': ['PPO', 'PREFERRED PROVIDER ORGANIZATION'],
+                'POS': ['POS', 'POINT OF SERVICE']
+            }
+            
+            # Normalize plan types using the mapping
+            api_normalized = None
+            puf_normalized = None
+            
+            for standard_type, variations in plan_type_mapping.items():
+                if api_plan_type in variations:
+                    api_normalized = standard_type
+                if puf_plan_type in variations:
+                    puf_normalized = standard_type
+            
+            if api_normalized and puf_normalized and api_normalized != puf_normalized:
+                raise Exception(f"Plan type mismatch: API reports {api_plan_type}, PUF file reports {puf_plan_type}")
+        
+        # Extract validated data
+        service_area = plan_data.get('service_area_id', 'Not specified')
         market = plan_data.get('market', 'Not specified')
         max_dependent_age = plan_data.get('max_age_child', 'Not specified')
         tobacco_lookback = plan_data.get('tobacco_lookback', 'Not specified')
         
-        # Create eligibility criteria object
+        # Create eligibility criteria object with validated data
         return PlanEligibilityCriteria(
             eligible_dependents=plan_data.get('issuer', {}).get('eligible_dependents', ['Not specified']),
             maximum_dependent_age=max_dependent_age,
