@@ -57,6 +57,18 @@
                                     </div>
                                     
                                     <div class="mb-3">
+                                        <label class="form-label">Tobacco Usage</label>
+                                        <div class="form-check mb-2">
+                                            <input type="checkbox" class="form-check-input" id="neverUsedTobacco">
+                                            <label class="form-check-label" for="neverUsedTobacco">Never used tobacco</label>
+                                        </div>
+                                        <div id="lastTobaccoUseContainer">
+                                            <label for="lastTobaccoUse" class="form-label">Last Tobacco Use Date</label>
+                                            <input type="date" class="form-control" id="lastTobaccoUse">
+                                        </div>
+                                    </div>
+
+                                    <div class="mb-3">
                                         <label for="dependentCount" class="form-label">Number of Dependents</label>
                                         <select class="form-control" id="dependentCount" required>
                                             <option value="0">0</option>
@@ -181,7 +193,9 @@
                         year: document.getElementById('year').value,
                         applicant_dob: document.getElementById('applicantDob').value,
                         income: document.getElementById('income').value,
-                        dependents: dependents
+                        dependents: dependents,
+                        never_used_tobacco: document.getElementById('neverUsedTobacco').checked,
+                        last_tobacco_use: document.getElementById('lastTobaccoUse').value || null
                     })
                 });
                 
@@ -201,6 +215,20 @@
                 resultCard.style.display = 'block';
             } finally {
                 loading.style.display = 'none';
+            }
+        });
+
+        // Add this JavaScript after the existing script
+        const neverUsedTobacco = document.getElementById('neverUsedTobacco');
+        const lastTobaccoUseContainer = document.getElementById('lastTobaccoUseContainer');
+        const lastTobaccoUse = document.getElementById('lastTobaccoUse');
+
+        neverUsedTobacco.addEventListener('change', function() {
+            if (this.checked) {
+                lastTobaccoUseContainer.style.display = 'none';
+                lastTobaccoUse.value = '';
+            } else {
+                lastTobaccoUseContainer.style.display = 'block';
             }
         });
     </script>

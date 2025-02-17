@@ -19,6 +19,13 @@ def evaluate():
         applicant_dob = datetime.strptime(data.get('applicant_dob'), '%Y-%m-%d').date()
         income = float(data.get('income'))
         dependents = data.get('dependents', [])
+        never_used_tobacco = data.get('never_used_tobacco', False)
+        last_tobacco_use = data.get('last_tobacco_use')
+        
+        # Convert last tobacco use date if provided
+        last_tobacco_use_date = None
+        if last_tobacco_use and not never_used_tobacco:
+            last_tobacco_use_date = datetime.strptime(last_tobacco_use, '%Y-%m-%d').date()
         
         # Convert dependent dates to date objects
         for dependent in dependents:
@@ -34,7 +41,9 @@ def evaluate():
             puf_file_path=puf_file,
             applicant_dob=applicant_dob,
             income=income,
-            dependents=dependents
+            dependents=dependents,
+            never_used_tobacco=never_used_tobacco,
+            last_tobacco_use_date=last_tobacco_use_date
         )
         
         return jsonify({

@@ -15,6 +15,7 @@ class PlanEligibilityCriteria:
     dental_coverage: bool
     is_eligible: bool
     eligibility_reasons: List[str]
+    tobacco_status: str
 
 class PlanEligibilityEvaluator:
     def __init__(self, api_key: str, puf_file_path: str):
@@ -85,7 +86,8 @@ class PlanEligibilityEvaluator:
         return age
 
     def evaluate_eligibility(self, plan_id: str, zip_code: str, year: str, applicant_dob: date, 
-                           income: float, dependents: List[Dict[str, Any]]) -> PlanEligibilityCriteria:
+                           income: float, dependents: List[Dict[str, Any]],
+                           never_used_tobacco: bool = False, last_tobacco_use_date: Optional[date] = None) -> PlanEligibilityCriteria:
         """Evaluate eligibility criteria for a given plan."""
         # Get data from both sources
         api_data = self.get_plan_details(plan_id, zip_code, year)
@@ -143,6 +145,20 @@ class PlanEligibilityEvaluator:
             is_eligible = False
             eligibility_reasons.append(f"Income must be at least ${min_income:,.2f} annually")
 
+        # Check tobacco usage rules
+        tobacco_lookback = plan_data.get('tobacco_lookback')
+        if tobacco_lookback is not None:
+            if not never_used_tobacco and last_tobacco_use_date:
+                # Calculate months since last tobacco use
+                today = date.today()
+                months_since_tobacco = (today.year - last_tobacco_use_date.year) * 12 + (today.month - last_tobacco_use_date.month)
+                
+                if months_since_tobacco < tobacco_lookback:
+                    is_eligible = False
+                    eligibility_reasons.append(f"Must be tobacco-free for at least {tobacco_lookback} months (currently {months_since_tobacco} months)")
+            elif not never_used_tobacco and not last_tobacco_use_date:
+                eligibility_reasons.append("Tobacco usage information required for this plan")
+
         # Check dependent eligibility
         max_dependent_age = plan_data.get('max_age_child', 26)
         allowed_relationships = set(['spouse', 'child', 'adopted_child'])
@@ -167,18 +183,23 @@ class PlanEligibilityEvaluator:
         # Extract other plan details
         service_area = plan_data.get('service_area_id', 'Not specified')
         market = plan_data.get('market', 'Not specified')
-        tobacco_lookback = plan_data.get('tobacco_lookback', 'Not specified')
+        
+        # Format tobacco rules message
+        tobacco_rules = "Not specified"
+        if tobacco_lookback is not None:
+            tobacco_rules = f"Must be tobacco-free for {tobacco_lookback} months"
         
         return PlanEligibilityCriteria(
             eligible_dependents=plan_data.get('issuer', {}).get('eligible_dependents', ['Not specified']),
             maximum_dependent_age=max_dependent_age,
             plan_type=plan_data.get('type', 'Not specified'),
             service_area=service_area,
-            tobacco_use_rules=f"Must be tobacco-free for {tobacco_lookback} months" if tobacco_lookback else "Not specified",
+            tobacco_use_rules=tobacco_rules,
             market_coverage=market,
             dental_coverage=any(b.get('covered', False) for b in plan_data.get('benefits', []) if 'DENTAL' in b.get('type', '')),
             is_eligible=is_eligible,
-            eligibility_reasons=eligibility_reasons
+            eligibility_reasons=eligibility_reasons,
+            tobacco_status="Never used tobacco" if never_used_tobacco else f"Last used tobacco on {last_tobacco_use_date}" if last_tobacco_use_date else "Not specified"
         )
 
     def format_eligibility_output(self, criteria: PlanEligibilityCriteria) -> List[str]:
@@ -206,13 +227,15 @@ class PlanEligibilityEvaluator:
             f"* Service area: {criteria.service_area}",
             f"* Tobacco use rules: {criteria.tobacco_use_rules}",
             f"* Market coverage: {criteria.market_coverage}",
-            f"* Dental coverage: {'Yes' if criteria.dental_coverage else 'No'}"
+            f"* Dental coverage: {'Yes' if criteria.dental_coverage else 'No'}",
+            f"* Tobacco status: {criteria.tobacco_status}"
         ])
         
         return bullets
 
 def evaluate_plan(api_key: str, plan_id: str, zip_code: str, year: int, puf_file_path: str,
-                 applicant_dob: date, income: float, dependents: List[Dict[str, Any]]) -> List[str]:
+                 applicant_dob: date, income: float, dependents: List[Dict[str, Any]], 
+                 never_used_tobacco: bool = False, last_tobacco_use_date: Optional[date] = None) -> List[str]:
     """
     Convenience function to evaluate plan eligibility in one call
     
@@ -225,10 +248,15 @@ def evaluate_plan(api_key: str, plan_id: str, zip_code: str, year: int, puf_file
         applicant_dob: Applicant's date of birth
         income: Annual household income
         dependents: List of dependent information (date of birth and relationship)
+        never_used_tobacco: Whether the applicant has never used tobacco
+        last_tobacco_use_date: Date of last tobacco use if applicable
         
     Returns:
         List of formatted eligibility criteria bullet points
     """
     evaluator = PlanEligibilityEvaluator(api_key, puf_file_path)
-    criteria = evaluator.evaluate_eligibility(plan_id, zip_code, year, applicant_dob, income, dependents)
+    criteria = evaluator.evaluate_eligibility(
+        plan_id, zip_code, year, applicant_dob, income, dependents,
+        never_used_tobacco, last_tobacco_use_date
+    )
     return evaluator.format_eligibility_output(criteria) 
