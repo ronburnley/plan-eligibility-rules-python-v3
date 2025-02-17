@@ -56,6 +56,28 @@
         input[type="date"]:not(:focus):not(:valid) {
             color: #6c757d;
         }
+        /* Add styles for eligibility results */
+        .eligibility-results {
+            list-style-type: none;
+            padding-left: 0;
+            margin-bottom: 0;
+        }
+        .eligibility-item {
+            display: flex;
+            align-items: baseline;
+            padding: 0.5rem 0;
+            color: #495057;
+            line-height: 1.5;
+        }
+        .eligibility-item::before {
+            content: "•";
+            font-size: 1.5em;
+            color: #0d6efd;
+            margin-right: 0.75rem;
+            line-height: 1;
+            position: relative;
+            top: -1px;
+        }
     </style>
 </head>
 <body>
@@ -233,9 +255,12 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    resultsDiv.innerHTML = data.criteria.map(criterion => 
-                        `<p class="mb-2">${criterion}</p>`
-                    ).join('');
+                    resultsDiv.innerHTML = `
+                        <ul class="eligibility-results">
+                            ${data.criteria.map(criterion => 
+                                `<li class="eligibility-item">${criterion.replace(/^\s*\*\s*/, '')}</li>`
+                            ).join('')}
+                        </ul>`;
                     resultCard.style.display = 'block';
                 } else {
                     resultsDiv.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
