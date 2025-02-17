@@ -78,6 +78,9 @@
             position: relative;
             top: -1px;
         }
+        .eligibility-item strong {
+            color: #212529;
+        }
     </style>
 </head>
 <body>
@@ -97,7 +100,6 @@
                             <div class="mb-3">
                                 <label for="planId" class="form-label">Plan ID</label>
                                 <input type="text" class="form-control" id="planId" required
-                                       placeholder="e.g., 53901AZ1420001">
                             </div>
                             <div class="mb-3">
                                 <label for="year" class="form-label">Plan Year</label>
@@ -133,7 +135,7 @@
                                     <div class="mb-3">
                                         <label for="zipCode" class="form-label">ZIP Code</label>
                                         <input type="text" class="form-control" id="zipCode" required
-                                               pattern="[0-9]{5}" placeholder="e.g., 85001">
+                                               pattern="[0-9]{5}" 
                                     </div>
 
                                     <div class="mb-3">
@@ -257,9 +259,16 @@
                 if (data.success) {
                     resultsDiv.innerHTML = `
                         <ul class="eligibility-results">
-                            ${data.criteria.map(criterion => 
-                                `<li class="eligibility-item">${criterion.replace(/^\s*\*\s*/, '')}</li>`
-                            ).join('')}
+                            ${data.criteria.map((criterion, index) => {
+                                if (index === 0) {
+                                    // For the first item (Eligibility Status), split and format with proper spacing
+                                    const [label, status] = criterion.replace(/^\s*\*\s*/, '').split(':');
+                                    return `<li class="eligibility-item">${label}: <strong>${status.trim()}</strong></li>`;
+                                }
+                                // For other items, ensure proper spacing after colon
+                                const formattedCriterion = criterion.replace(/^\s*\*\s*/, '').replace(/:\s*/, ': ');
+                                return `<li class="eligibility-item">${formattedCriterion}</li>`;
+                            }).join('')}
                         </ul>`;
                     resultCard.style.display = 'block';
                 } else {
