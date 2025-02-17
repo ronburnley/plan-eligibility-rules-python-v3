@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, jsonify
 from plan_eligibility import evaluate_plan
+from datetime import datetime
 
 app = Flask(__name__)
 
@@ -15,9 +16,27 @@ def evaluate():
         plan_id = data.get('plan_id')
         zip_code = data.get('zip_code')
         year = int(data.get('year'))
+        applicant_dob = datetime.strptime(data.get('applicant_dob'), '%Y-%m-%d').date()
+        income = float(data.get('income'))
+        dependents = data.get('dependents', [])
+        
+        # Convert dependent dates to date objects
+        for dependent in dependents:
+            dependent['date_of_birth'] = datetime.strptime(dependent['date_of_birth'], '%Y-%m-%d').date()
+        
         puf_file = "business-rules-puf 2.csv"
 
-        criteria = evaluate_plan(api_key, plan_id, zip_code, year, puf_file)
+        criteria = evaluate_plan(
+            api_key=api_key,
+            plan_id=plan_id,
+            zip_code=zip_code,
+            year=year,
+            puf_file_path=puf_file,
+            applicant_dob=applicant_dob,
+            income=income,
+            dependents=dependents
+        )
+        
         return jsonify({
             'success': True,
             'criteria': criteria

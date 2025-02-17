@@ -1,7 +1,8 @@
 import requests
 import pandas as pd
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
+from datetime import date, datetime
 
 @dataclass
 class PlanEligibilityCriteria:
@@ -12,6 +13,8 @@ class PlanEligibilityCriteria:
     tobacco_use_rules: str
     market_coverage: str
     dental_coverage: bool
+    is_eligible: bool
+    eligibility_reasons: List[str]
 
 class PlanEligibilityEvaluator:
     def __init__(self, api_key: str, puf_file_path: str):
@@ -73,7 +76,16 @@ class PlanEligibilityEvaluator:
             
         return matching_rules.iloc[0]
 
-    def evaluate_eligibility(self, plan_id: str, zip_code: str, year: str) -> PlanEligibilityCriteria:
+    def calculate_age(self, birth_date: date) -> int:
+        """Calculate age from birth date."""
+        today = date.today()
+        age = today.year - birth_date.year
+        if today.month < birth_date.month or (today.month == birth_date.month and today.day < birth_date.day):
+            age -= 1
+        return age
+
+    def evaluate_eligibility(self, plan_id: str, zip_code: str, year: str, applicant_dob: date, 
+                           income: float, dependents: List[Dict[str, Any]]) -> PlanEligibilityCriteria:
         """Evaluate eligibility criteria for a given plan."""
         # Get data from both sources
         api_data = self.get_plan_details(plan_id, zip_code, year)
@@ -85,7 +97,7 @@ class PlanEligibilityEvaluator:
         # Extract data from API response
         plan_data = api_data.get('plan', {})
         
-        # Validate plan details against PUF rules with better error handling
+        # Validate plan details against PUF rules
         api_market = plan_data.get('market', '').upper()
         puf_market = str(puf_rules.get('MarketCoverage', '')).upper().strip()
         if api_market and puf_market and api_market != puf_market:
@@ -94,10 +106,6 @@ class PlanEligibilityEvaluator:
         api_plan_type = plan_data.get('type', '').upper()
         puf_plan_type = str(puf_rules.get('PlanType', '')).upper().strip()
         if api_plan_type and puf_plan_type:
-            # Print debug information
-            print(f"Debug - API Plan Type: '{api_plan_type}'")
-            print(f"Debug - PUF Plan Type: '{puf_plan_type}'")
-            
             # Map common plan type variations
             plan_type_mapping = {
                 'EPO': ['EPO', 'EXCLUSIVE PROVIDER ORGANIZATION'],
@@ -118,14 +126,49 @@ class PlanEligibilityEvaluator:
             
             if api_normalized and puf_normalized and api_normalized != puf_normalized:
                 raise Exception(f"Plan type mismatch: API reports {api_plan_type}, PUF file reports {puf_plan_type}")
+
+        # Evaluate applicant eligibility
+        eligibility_reasons = []
+        is_eligible = True
+
+        # Check applicant age
+        applicant_age = self.calculate_age(applicant_dob)
+        if applicant_age < 18:
+            is_eligible = False
+            eligibility_reasons.append("Applicant must be at least 18 years old")
+
+        # Check income requirements
+        min_income = float(puf_rules.get('MinimumMonthlyPremium', 0)) * 12
+        if income < min_income:
+            is_eligible = False
+            eligibility_reasons.append(f"Income must be at least ${min_income:,.2f} annually")
+
+        # Check dependent eligibility
+        max_dependent_age = plan_data.get('max_age_child', 26)
+        allowed_relationships = set(['spouse', 'child', 'adopted_child'])
         
-        # Extract validated data
+        for dependent in dependents:
+            dependent_age = self.calculate_age(dependent['date_of_birth'])
+            relationship = dependent['relationship']
+
+            if relationship not in allowed_relationships:
+                if relationship in ['brother', 'sister', 'grandparent']:
+                    is_eligible = False
+                    eligibility_reasons.append(f"{relationship.capitalize()} is not an eligible dependent type for this plan")
+            
+            if relationship in ['child', 'adopted_child'] and dependent_age > max_dependent_age:
+                is_eligible = False
+                eligibility_reasons.append(f"Dependent children must be under {max_dependent_age} years old")
+
+        # If no specific reasons for ineligibility were found
+        if is_eligible:
+            eligibility_reasons.append("All eligibility criteria met")
+        
+        # Extract other plan details
         service_area = plan_data.get('service_area_id', 'Not specified')
         market = plan_data.get('market', 'Not specified')
-        max_dependent_age = plan_data.get('max_age_child', 'Not specified')
         tobacco_lookback = plan_data.get('tobacco_lookback', 'Not specified')
         
-        # Create eligibility criteria object with validated data
         return PlanEligibilityCriteria(
             eligible_dependents=plan_data.get('issuer', {}).get('eligible_dependents', ['Not specified']),
             maximum_dependent_age=max_dependent_age,
@@ -133,7 +176,9 @@ class PlanEligibilityEvaluator:
             service_area=service_area,
             tobacco_use_rules=f"Must be tobacco-free for {tobacco_lookback} months" if tobacco_lookback else "Not specified",
             market_coverage=market,
-            dental_coverage=any(b.get('covered', False) for b in plan_data.get('benefits', []) if 'DENTAL' in b.get('type', ''))
+            dental_coverage=any(b.get('covered', False) for b in plan_data.get('benefits', []) if 'DENTAL' in b.get('type', '')),
+            is_eligible=is_eligible,
+            eligibility_reasons=eligibility_reasons
         )
 
     def format_eligibility_output(self, criteria: PlanEligibilityCriteria) -> List[str]:
@@ -146,7 +191,14 @@ class PlanEligibilityEvaluator:
         Returns:
             List of formatted bullet points
         """
+        # Start with eligibility status
         bullets = [
+            f"* Eligibility Status: {'ELIGIBLE' if criteria.is_eligible else 'NOT ELIGIBLE'}",
+            f"* Eligibility Details: {'; '.join(criteria.eligibility_reasons)}"
+        ]
+
+        # Add plan details
+        bullets.extend([
             f"* Eligible dependents: {', '.join(criteria.eligible_dependents)}",
             f"* Maximum dependent age: {criteria.maximum_dependent_age if criteria.maximum_dependent_age > 0 else 'Not Applicable'}" + 
             (" (extends beyond standard age 26)" if criteria.maximum_dependent_age > 26 else ""),
@@ -155,11 +207,12 @@ class PlanEligibilityEvaluator:
             f"* Tobacco use rules: {criteria.tobacco_use_rules}",
             f"* Market coverage: {criteria.market_coverage}",
             f"* Dental coverage: {'Yes' if criteria.dental_coverage else 'No'}"
-        ]
+        ])
         
         return bullets
 
-def evaluate_plan(api_key: str, plan_id: str, zip_code: str, year: int, puf_file_path: str) -> List[str]:
+def evaluate_plan(api_key: str, plan_id: str, zip_code: str, year: int, puf_file_path: str,
+                 applicant_dob: date, income: float, dependents: List[Dict[str, Any]]) -> List[str]:
     """
     Convenience function to evaluate plan eligibility in one call
     
@@ -169,10 +222,13 @@ def evaluate_plan(api_key: str, plan_id: str, zip_code: str, year: int, puf_file
         zip_code: ZIP code for service area check
         year: Plan year
         puf_file_path: Path to business rules PUF file
+        applicant_dob: Applicant's date of birth
+        income: Annual household income
+        dependents: List of dependent information (date of birth and relationship)
         
     Returns:
         List of formatted eligibility criteria bullet points
     """
     evaluator = PlanEligibilityEvaluator(api_key, puf_file_path)
-    criteria = evaluator.evaluate_eligibility(plan_id, zip_code, year)
+    criteria = evaluator.evaluate_eligibility(plan_id, zip_code, year, applicant_dob, income, dependents)
     return evaluator.format_eligibility_output(criteria) 
