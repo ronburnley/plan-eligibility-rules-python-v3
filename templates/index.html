@@ -15,10 +15,46 @@
             text-align: center;
             margin: 20px 0;
         }
-        .dependent-row {
-            margin-top: 15px;
-            padding-top: 15px;
-            border-top: 1px solid #eee;
+        .section-card {
+            background: #fff;
+            border: 1px solid #dee2e6;
+            border-radius: 0.375rem;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .section-title {
+            font-size: 1.1rem;
+            font-weight: 500;
+            margin-bottom: 1.5rem;
+            color: #212529;
+        }
+        .dependent-entry {
+            margin-bottom: 1rem;
+            padding: 1rem;
+            background: #f8f9fa;
+            border-radius: 0.375rem;
+        }
+        .dependent-label {
+            font-weight: 500;
+            color: #495057;
+            margin-bottom: 0.5rem;
+        }
+        .form-control {
+            margin-bottom: 1rem;
+        }
+        .form-label {
+            font-weight: 500;
+            color: #495057;
+        }
+        /* Add styles for date input placeholders */
+        input[type="date"]::-webkit-datetime-edit {
+            color: #6c757d;
+        }
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            opacity: 0.5;
+        }
+        input[type="date"]:not(:focus):not(:valid) {
+            color: #6c757d;
         }
     </style>
 </head>
@@ -57,18 +93,6 @@
                                     </div>
                                     
                                     <div class="mb-3">
-                                        <label class="form-label">Tobacco Usage</label>
-                                        <div class="form-check mb-2">
-                                            <input type="checkbox" class="form-check-input" id="neverUsedTobacco">
-                                            <label class="form-check-label" for="neverUsedTobacco">Never used tobacco</label>
-                                        </div>
-                                        <div id="lastTobaccoUseContainer">
-                                            <label for="lastTobaccoUse" class="form-label">Last Tobacco Use Date</label>
-                                            <input type="date" class="form-control" id="lastTobaccoUse">
-                                        </div>
-                                    </div>
-
-                                    <div class="mb-3">
                                         <label for="dependentCount" class="form-label">Number of Dependents</label>
                                         <select class="form-control" id="dependentCount" required>
                                             <option value="0">0</option>
@@ -91,9 +115,16 @@
                                     </div>
 
                                     <div class="mb-3">
-                                        <label for="income" class="form-label">Income</label>
-                                        <input type="number" class="form-control" id="income" required
-                                               min="0" step="0.01" placeholder="Annual household income">
+                                        <label class="form-label">Last Tobacco Use</label>
+                                        <div class="d-flex align-items-center gap-3">
+                                            <div class="form-check mb-0">
+                                                <input type="checkbox" class="form-check-input" id="neverUsedTobacco">
+                                                <label class="form-check-label" for="neverUsedTobacco">Never</label>
+                                            </div>
+                                            <div id="lastTobaccoUseContainer" class="flex-grow-1">
+                                                <input type="date" class="form-control mb-0" id="lastTobaccoUse">
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -125,22 +156,22 @@
         // Function to create a dependent row
         function createDependentRow(index) {
             return `
-                <div class="dependent-row" id="dependent-${index}">
-                    <h6>Dependent ${index}</h6>
+                <div class="dependent-entry">
+                    <div class="dependent-label">Dependent ${index}</div>
                     <div class="row">
-                        <div class="col-md-6 mb-3">
+                        <div class="col-md-6">
                             <label for="dependent${index}Dob" class="form-label">Date of Birth</label>
                             <input type="date" class="form-control" id="dependent${index}Dob" required>
                         </div>
-                        <div class="col-md-6 mb-3">
+                        <div class="col-md-6">
                             <label for="dependent${index}Relationship" class="form-label">Relationship Type</label>
                             <select class="form-control" id="dependent${index}Relationship" required>
                                 <option value="spouse">Spouse</option>
                                 <option value="child">Child</option>
-                                <option value="adopted_child">Adopted Child</option>
-                                <option value="brother">Brother</option>
-                                <option value="sister">Sister</option>
-                                <option value="grandparent">Grandparent</option>
+                                <option value="life_partner">Life Partner</option>
+                                <option value="foster_child">Foster Child</option>
+                                <option value="ward">Ward</option>
+                                <option value="step_child">Step-Child</option>
                             </select>
                         </div>
                     </div>
@@ -192,7 +223,7 @@
                         zip_code: document.getElementById('zipCode').value,
                         year: document.getElementById('year').value,
                         applicant_dob: document.getElementById('applicantDob').value,
-                        income: document.getElementById('income').value,
+                        income: 0,
                         dependents: dependents,
                         never_used_tobacco: document.getElementById('neverUsedTobacco').checked,
                         last_tobacco_use: document.getElementById('lastTobaccoUse').value || null
