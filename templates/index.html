@@ -95,15 +95,15 @@
                         <form id="evaluationForm">
                             <div class="mb-3">
                                 <label for="apiKey" class="form-label">CMS API Key</label>
-                                <input type="password" class="form-control" id="apiKey" required>
+                                <input type="password" class="form-control w-50" id="apiKey" required>
                             </div>
                             <div class="mb-3">
                                 <label for="planId" class="form-label">Plan ID</label>
-                                <input type="text" class="form-control" id="planId" required
+                                <input type="text" class="form-control w-50" id="planId" required>
                             </div>
                             <div class="mb-3">
                                 <label for="year" class="form-label">Plan Year</label>
-                                <input type="number" class="form-control" id="year" required
+                                <input type="number" class="form-control w-25" id="year" required
                                        min="2020" max="2030" value="2025">
                             </div>
 
@@ -113,12 +113,12 @@
                                     
                                     <div class="mb-3">
                                         <label for="applicantDob" class="form-label">Applicant Date of Birth</label>
-                                        <input type="date" class="form-control" id="applicantDob" required>
+                                        <input type="date" class="form-control w-25" id="applicantDob" required>
                                     </div>
                                     
                                     <div class="mb-3">
                                         <label for="dependentCount" class="form-label">Number of Dependents</label>
-                                        <select class="form-control" id="dependentCount" required>
+                                        <select class="form-control w-25" id="dependentCount" required>
                                             <option value="0">0</option>
                                             <option value="1">1</option>
                                             <option value="2">2</option>
@@ -134,8 +134,14 @@
 
                                     <div class="mb-3">
                                         <label for="zipCode" class="form-label">ZIP Code</label>
-                                        <input type="text" class="form-control" id="zipCode" required
+                                        <input type="text" class="form-control w-25" id="zipCode" required
                                                pattern="[0-9]{5}" 
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label for="income" class="form-label">Annual Income ($)</label>
+                                        <input type="number" class="form-control w-25" id="income" required
+                                               min="0" step="1000">
                                     </div>
 
                                     <div class="mb-3">
@@ -146,14 +152,12 @@
                                                 <label class="form-check-label" for="neverUsedTobacco">Never</label>
                                             </div>
                                             <div id="lastTobaccoUseContainer" class="flex-grow-1">
-                                                <input type="date" class="form-control mb-0" id="lastTobaccoUse">
+                                                <input type="date" class="form-control w-25 mb-0" id="lastTobaccoUse">
                                             </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-
-                            <button type="submit" class="btn btn-primary w-100 mt-4">Evaluate Plan</button>
                         </form>
                     </div>
                 </div>
@@ -163,6 +167,10 @@
                         <span class="visually-hidden">Loading...</span>
                     </div>
                     <p class="mt-2">Evaluating plan eligibility...</p>
+                </div>
+
+                <div class="d-flex justify-content-center position-relative" style="top: 5rem;">
+                    <button type="submit" class="btn btn-primary w-25" form="evaluationForm">Evaluate Plan</button>
                 </div>
 
                 <div class="card result-card">
@@ -247,53 +255,54 @@
                         zip_code: document.getElementById('zipCode').value,
                         year: document.getElementById('year').value,
                         applicant_dob: document.getElementById('applicantDob').value,
-                        income: 0,
+                        income: parseFloat(document.getElementById('income').value),
                         dependents: dependents,
                         never_used_tobacco: document.getElementById('neverUsedTobacco').checked,
-                        last_tobacco_use: document.getElementById('lastTobaccoUse').value || null
+                        last_tobacco_use: document.getElementById('neverUsedTobacco').checked ? null : document.getElementById('lastTobaccoUse').value
                     })
                 });
                 
-                const data = await response.json();
+                const result = await response.json();
                 
-                if (data.success) {
+                if (result.success) {
+                    loading.style.display = 'none';
+                    resultCard.style.display = 'block';
+                    
+                    // Display the results
+                    const criteriaHtml = result.criteria.map((criterion, index) => {
+                        // Remove asterisks and leading/trailing whitespace
+                        const cleanCriterion = criterion.replace(/^\s*\*\s*/, '').trim();
+                        
+                        if (index === 0) {
+                            // For the first item (Eligibility Status), split and format with proper spacing
+                            const [label, status] = cleanCriterion.split(':');
+                            return `<div class="eligibility-item">${label}: <strong>${status.trim()}</strong></div>`;
+                        }
+                        return `<div class="eligibility-item">${cleanCriterion}</div>`;
+                    }).join('');
+                    
                     resultsDiv.innerHTML = `
                         <ul class="eligibility-results">
-                            ${data.criteria.map((criterion, index) => {
-                                if (index === 0) {
-                                    // For the first item (Eligibility Status), split and format with proper spacing
-                                    const [label, status] = criterion.replace(/^\s*\*\s*/, '').split(':');
-                                    return `<li class="eligibility-item">${label}: <strong>${status.trim()}</strong></li>`;
-                                }
-                                // For other items, ensure proper spacing after colon
-                                const formattedCriterion = criterion.replace(/^\s*\*\s*/, '').replace(/:\s*/, ': ');
-                                return `<li class="eligibility-item">${formattedCriterion}</li>`;
-                            }).join('')}
-                        </ul>`;
-                    resultCard.style.display = 'block';
+                            ${criteriaHtml}
+                        </ul>
+                    `;
                 } else {
-                    resultsDiv.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
-                    resultCard.style.display = 'block';
+                    loading.style.display = 'none';
+                    alert('Error: ' + result.error);
                 }
             } catch (error) {
-                resultsDiv.innerHTML = `<div class="alert alert-danger">An error occurred: ${error.message}</div>`;
-                resultCard.style.display = 'block';
-            } finally {
                 loading.style.display = 'none';
+                alert('An error occurred while evaluating the plan. Please try again.');
+                console.error('Error:', error);
             }
         });
 
-        // Add this JavaScript after the existing script
-        const neverUsedTobacco = document.getElementById('neverUsedTobacco');
-        const lastTobaccoUseContainer = document.getElementById('lastTobaccoUseContainer');
-        const lastTobaccoUse = document.getElementById('lastTobaccoUse');
-
-        neverUsedTobacco.addEventListener('change', function() {
-            if (this.checked) {
-                lastTobaccoUseContainer.style.display = 'none';
-                lastTobaccoUse.value = '';
-            } else {
-                lastTobaccoUseContainer.style.display = 'block';
+        // Handle never used tobacco checkbox
+        document.getElementById('neverUsedTobacco').addEventListener('change', function(e) {
+            const lastTobaccoUseInput = document.getElementById('lastTobaccoUse');
+            lastTobaccoUseInput.disabled = e.target.checked;
+            if (e.target.checked) {
+                lastTobaccoUseInput.value = '';
             }
         });
     </script>
